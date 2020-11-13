@@ -19,8 +19,13 @@ package org.springframework.session.jdbc;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Supplier;
 
 import javax.sql.DataSource;
@@ -757,6 +762,27 @@ abstract class AbstractJdbcIndexedSessionRepositoryITests {
 
 		assertThat(session).isNotNull();
 		assertThat((byte[]) session.getAttribute(attributeName)).hasSize(arraySize);
+	}
+
+	@Test // gh-838
+	void cleanUpExpiredSessionsWithConcurrentUpdates() throws Exception {
+		ExecutorService executor = Executors.newFixedThreadPool(10);
+		List<Callable<Integer>> tasks = new ArrayList<>();
+		for (int i = 0; i < 20; i++) {
+			JdbcSession session = this.repository.createSession();
+			session.setLastAccessedTime(Instant.EPOCH);
+			session.setAttribute("attribute1", "value1");
+			tasks.add(() -> {
+				this.repository.save(session);
+				return 0;
+			});
+			tasks.add(() -> {
+				this.repository.cleanUpExpiredSessions();
+				return 0;
+			});
+		}
+		executor.invokeAll(tasks).forEach((result) -> assertThat(result).succeedsWithin(Duration.ofSeconds(1)));
+		executor.shutdown();
 	}
 
 	private String getSecurityName() {
