@@ -188,7 +188,15 @@ public class JdbcIndexedSessionRepository
 
 	// @formatter:off
 	private static final String DELETE_SESSIONS_BY_EXPIRY_TIME_QUERY = "DELETE FROM %TABLE_NAME% "
-			+ "WHERE EXPIRY_TIME < ?";
+			+ "WHERE PRIMARY_ID IN ( "
+			+ "    SELECT PRIMARY_ID "
+			+ "    FROM ( "
+			+ "        SELECT PRIMARY_ID "
+			+ "        FROM %TABLE_NAME% "
+			+ "        WHERE EXPIRY_TIME < ? "
+			+ "        ORDER BY PRIMARY_ID "
+			+ "    ) S "
+			+ ")";
 	// @formatter:on
 
 	private static final Log logger = LogFactory.getLog(JdbcIndexedSessionRepository.class);
